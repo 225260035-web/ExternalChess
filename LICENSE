@@ -1,0 +1,46 @@
+GNU GENERAL PUBLIC LICENSE
+Version 3, 29 June 2007
+
+Copyright (C) 2024 Turkish Chess Engine Team
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+---
+
+This chess engine incorporates evaluation functions derived from the
+Stockfish chess engine, which is also licensed under GPL v3:
+
+Stockfish, a UCI chess playing engine derived from Glaurung 2.1
+Copyright (C) 2004-2008 Tord Romstad (Glaurung author)
+Copyright (C) 2008-2015 Marco Costalba, Joona Kiiski, Tord Romstad
+Copyright (C) 2015-2020 Marco Costalba, Joona Kiiski, Gary Linscott, Tord Romstad
+
+The evaluation functions in the external_eval/ directory are adapted
+from Stockfish and remain under the original GPL v3 license.
+
+ADDITIONAL TERMS:
+
+1. Attribution: When distributing this software or derivative works,
+   you must retain the copyright notices and attribution to both the
+   Turkish Chess Engine Team and the original Stockfish authors.
+
+2. Engine Identity: If you create a derivative work, you must clearly
+   identify it as derived from this engine and not claim it as your
+   own original work.
+
+3. Source Code: As required by GPL v3, you must provide access to the
+   complete source code when distributing the compiled engine.
+
+For the complete GPL v3 license text, visit:
+https://www.gnu.org/licenses/gpl-3.0.html
