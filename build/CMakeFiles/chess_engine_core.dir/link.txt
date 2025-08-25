@@ -1,0 +1,2 @@
+/usr/bin/ar qc libchess_engine_core.a CMakeFiles/chess_engine_core.dir/src/bitboard.cpp.o CMakeFiles/chess_engine_core.dir/src/position.cpp.o CMakeFiles/chess_engine_core.dir/src/evaluate.cpp.o CMakeFiles/chess_engine_core.dir/src/search.cpp.o
+/usr/bin/ranlib libchess_engine_core.a

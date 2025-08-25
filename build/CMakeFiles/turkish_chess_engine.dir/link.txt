@@ -1,0 +1,1 @@
+/usr/bin/c++  -Wall -Wextra -O3 -DNDEBUG -flto -march=native -Xlinker --dependency-file=CMakeFiles/turkish_chess_engine.dir/link.d CMakeFiles/turkish_chess_engine.dir/src/main.cpp.o -o turkish_chess_engine  libchess_engine_core.a
