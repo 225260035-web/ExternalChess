@@ -214,28 +214,23 @@ namespace {
   void Evaluation<T>::initialize() {
 
     constexpr Color     Them = (Us == WHITE ? BLACK : WHITE);
-    constexpr Direction Up   = pawn_push(Us);
+    constexpr Direction Up   = pawn_push<Us>();
     constexpr Direction Down = -Up;
-    constexpr Bitboard LowRanks = (Us == WHITE ? Rank2BB | Rank3BB : Rank7BB | Rank6BB);
+    const Bitboard LowRanks = (Us == WHITE ? (Rank2BB | Rank3BB) : (Rank7BB | Rank6BB));
 
     const Square ksq = pos.square<KING>(Us);
 
     Bitboard dblAttackByPawn = pawn_double_attacks_bb<Us>(pos.pieces(Us, PAWN));
 
-    // Find our pawns that are blocked or on the first two ranks
     Bitboard b = pos.pieces(Us, PAWN) & (shift<Down>(pos.pieces()) | LowRanks);
 
-    // Squares occupied by those pawns, by our king or queen, by blockers to attacks on our king
-    // or controlled by enemy pawns are excluded from the mobility area.
-    mobilityArea[Us] = ~(b | pos.pieces(Us, KING, QUEEN) | pos.blockers_for_king(Us) | pe->pawn_attacks(Them));
+    mobilityArea[Us] = ~(b | (pos.pieces(Us, KING) | pos.pieces(Us, QUEEN)) | pos.blockers_for_king(Us) | pe->pawn_attacks(Them));
 
-    // Initialize attackedBy[] for king and pawns
     attackedBy[Us][KING] = pos.attacks_from<KING>(ksq);
     attackedBy[Us][PAWN] = pe->pawn_attacks(Us);
     attackedBy[Us][ALL_PIECES] = attackedBy[Us][KING] | attackedBy[Us][PAWN];
     attackedBy2[Us] = dblAttackByPawn | (attackedBy[Us][KING] & attackedBy[Us][PAWN]);
 
-    // Init our king safety tables
     Square s = make_square(clamp(file_of(ksq), FILE_B, FILE_G),
                            clamp(rank_of(ksq), RANK_2, RANK_7));
     kingRing[Us] = PseudoAttacks[KING][s] | s;
@@ -243,7 +238,6 @@ namespace {
     kingAttackersCount[Them] = popcount(kingRing[Us] & pe->pawn_attacks(Them));
     kingAttacksCount[Them] = kingAttackersWeight[Them] = 0;
 
-    // Remove from kingRing[] the squares defended by two pawns
     kingRing[Us] &= ~dblAttackByPawn;
   }
 
@@ -253,9 +247,9 @@ namespace {
   Score Evaluation<T>::pieces() {
 
     constexpr Color     Them = (Us == WHITE ? BLACK : WHITE);
-    constexpr Direction Down = -pawn_push(Us);
-    constexpr Bitboard OutpostRanks = (Us == WHITE ? Rank4BB | Rank5BB | Rank6BB
-                                                   : Rank5BB | Rank4BB | Rank3BB);
+    constexpr Direction Down = -pawn_push<Us>();
+    const Bitboard OutpostRanks = (Us == WHITE ? (Rank4BB | Rank5BB | Rank6BB)
+                                              : (Rank5BB | Rank4BB | Rank3BB));
     const Square* pl = pos.squares<Pt>(Us);
 
     Bitboard b, bb;
@@ -265,7 +259,6 @@ namespace {
 
     for (Square s = *pl; s != SQ_NONE; s = *++pl)
     {
-        // Find attacked squares, including x-ray attacks for bishops and rooks
         b = Pt == BISHOP ? attacks_bb<BISHOP>(s, pos.pieces() ^ pos.pieces(QUEEN))
           : Pt ==   ROOK ? attacks_bb<  ROOK>(s, pos.pieces() ^ pos.pieces(QUEEN) ^ pos.pieces(Us, ROOK))
                          : pos.attacks_from<Pt>(s);
@@ -290,7 +283,6 @@ namespace {
 
         if (Pt == BISHOP || Pt == KNIGHT)
         {
-            // Bonus if piece is on an outpost square or can reach one
             bb = OutpostRanks & attackedBy[Us][PAWN] & ~pe->pawn_attacks_span(Them);
             if (bb & s)
                 score += Outpost * (Pt == KNIGHT ? 2 : 1);
@@ -298,35 +290,27 @@ namespace {
             else if (Pt == KNIGHT && bb & b & ~pos.pieces(Us))
                 score += ReachableOutpost;
 
-            // Knight and Bishop bonus for being right behind a pawn
             if (shift<Down>(pos.pieces(PAWN)) & s)
                 score += MinorBehindPawn;
 
-            // Penalty if the piece is far from the king
             score -= KingProtector * distance(s, pos.square<KING>(Us));
 
             if (Pt == BISHOP)
             {
-                // Penalty according to number of pawns on the same color square as the
-                // bishop, bigger when the center files are blocked with pawns.
                 Bitboard blocked = pos.pieces(Us, PAWN) & shift<Down>(pos.pieces());
 
                 score -= BishopPawns * pos.pawns_on_same_color_squares(Us, s)
                                      * (1 + popcount(blocked & CenterFiles));
 
-                // Bonus for bishop on a long diagonal which can "see" both center squares
                 if (more_than_one(attacks_bb<BISHOP>(s, pos.pieces(PAWN)) & Center))
                     score += LongDiagonalBishop;
 
-                // An important Chess960 pattern: a cornered bishop blocked by a friendly
-                // pawn diagonally in front of it is a very serious problem, especially
-                // when that pawn is also blocked.
                 if (   pos.is_chess960()
                     && (s == relative_square(Us, SQ_A1) || s == relative_square(Us, SQ_H1)))
                 {
-                    Direction d = pawn_push(Us) + (file_of(s) == FILE_A ? EAST : WEST);
+                    Direction d = pawn_push<Us>() + (file_of(s) == FILE_A ? EAST : WEST);
                     if (pos.piece_on(s + d) == make_piece(Us, PAWN))
-                        score -= !pos.empty(s + d + pawn_push(Us))                ? CorneredBishop * 4
+                        score -= !pos.empty(s + d + pawn_push<Us>())                ? CorneredBishop * 4
                                 : pos.piece_on(s + d + d) == make_piece(Us, PAWN) ? CorneredBishop * 2
                                                                                   : CorneredBishop;
                 }
@@ -335,15 +319,12 @@ namespace {
 
         if (Pt == ROOK)
         {
-            // Bonus for rook on the same file as a queen
-            if (file_bb(s) & pos.pieces(QUEEN))
+            if (file_bb(file_of(s)) & pos.pieces(QUEEN))
                 score += RookOnQueenFile;
 
-            // Bonus for rook on an open or semi-open file
             if (pos.is_on_semiopen_file(Us, s))
                 score += RookOnFile[pos.is_on_semiopen_file(Them, s)];
 
-            // Penalty when trapped by the king, even more if the king cannot castle
             else if (mob <= 3)
             {
                 File kf = file_of(pos.square<KING>(Us));
@@ -354,9 +335,8 @@ namespace {
 
         if (Pt == QUEEN)
         {
-            // Penalty if any relative pin or discovered attack against the queen
             Bitboard queenPinners;
-            if (pos.slider_blockers(pos.pieces(Them, ROOK, BISHOP), s, queenPinners))
+            if (pos.slider_blockers((pos.pieces(Them, ROOK) | pos.pieces(Them, BISHOP)), s, queenPinners))
                 score -= WeakQueen;
         }
     }
@@ -370,79 +350,34 @@ namespace {
   // Evaluation::king() assigns bonuses and penalties to a king of a given color
   template<Tracing T> template<Color Us>
   Score Evaluation<T>::king() const {
-
-    constexpr Color    Them = (Us == WHITE ? BLACK : WHITE);
-    constexpr Bitboard Camp = (Us == WHITE ? AllSquares ^ Rank6BB ^ Rank7BB ^ Rank8BB
-                                           : AllSquares ^ Rank1BB ^ Rank2BB ^ Rank3BB);
-
+    constexpr Color Them = (Us == WHITE ? BLACK : WHITE);
+    const Bitboard Camp = (Us == WHITE ? (AllSquares ^ Rank6BB ^ Rank7BB ^ Rank8BB)
+                                       : (AllSquares ^ Rank1BB ^ Rank2BB ^ Rank3BB));
     Bitboard weak, b1, b2, b3, safe, unsafeChecks = 0;
     Bitboard rookChecks, queenChecks, bishopChecks, knightChecks;
     int kingDanger = 0;
     const Square ksq = pos.square<KING>(Us);
-
-    // Init the score with king shelter and enemy pawns storm
     Score score = pe->king_safety<Us>(pos);
-
-    // Attacked squares defended at most once by our queen or king
     weak =  attackedBy[Them][ALL_PIECES]
           & ~attackedBy2[Us]
           & (~attackedBy[Us][ALL_PIECES] | attackedBy[Us][KING] | attackedBy[Us][QUEEN]);
-
-    // Analyse the safe enemy's checks which are possible on next move
     safe  = ~pos.pieces(Them);
     safe &= ~attackedBy[Us][ALL_PIECES] | (weak & attackedBy2[Them]);
-
     b1 = attacks_bb<ROOK  >(ksq, pos.pieces() ^ pos.pieces(Us, QUEEN));
     b2 = attacks_bb<BISHOP>(ksq, pos.pieces() ^ pos.pieces(Us, QUEEN));
-
-    // Enemy rooks checks
     rookChecks = b1 & safe & attackedBy[Them][ROOK];
-
-    if (rookChecks)
-        kingDanger += RookSafeCheck;
-    else
-        unsafeChecks |= b1 & attackedBy[Them][ROOK];
-
-    // Enemy queen safe checks: we count them only if they are from squares from
-    // which we can't give a rook check, because rook checks are more valuable.
-    queenChecks =  (b1 | b2)
-                 & attackedBy[Them][QUEEN]
-                 & safe
-                 & ~attackedBy[Us][QUEEN]
-                 & ~rookChecks;
-
-    if (queenChecks)
-        kingDanger += QueenSafeCheck;
-
-    // Enemy bishops checks: we count them only if they are from squares from
-    // which we can't give a queen check, because queen checks are more valuable.
-    bishopChecks =  b2
-                  & attackedBy[Them][BISHOP]
-                  & safe
-                  & ~queenChecks;
-
-    if (bishopChecks)
-        kingDanger += BishopSafeCheck;
-    else
-        unsafeChecks |= b2 & attackedBy[Them][BISHOP];
-
-    // Enemy knights checks
+    if (rookChecks) kingDanger += RookSafeCheck; else unsafeChecks |= b1 & attackedBy[Them][ROOK];
+    queenChecks =  (b1 | b2) & attackedBy[Them][QUEEN] & safe & ~attackedBy[Us][QUEEN] & ~rookChecks;
+    if (queenChecks) kingDanger += QueenSafeCheck;
+    bishopChecks =  b2 & attackedBy[Them][BISHOP] & safe & ~queenChecks;
+    if (bishopChecks) kingDanger += BishopSafeCheck; else unsafeChecks |= b2 & attackedBy[Them][BISHOP];
     knightChecks = pos.attacks_from<KNIGHT>(ksq) & attackedBy[Them][KNIGHT];
-
-    if (knightChecks & safe)
-        kingDanger += KnightSafeCheck;
-    else
-        unsafeChecks |= knightChecks;
-
-    // Find the squares that opponent attacks in our king flank, the squares
-    // which they attack twice in that flank, and the squares that we defend.
+    if (knightChecks & safe) kingDanger += KnightSafeCheck; else unsafeChecks |= knightChecks;
     b1 = attackedBy[Them][ALL_PIECES] & KingFlank[file_of(ksq)] & Camp;
     b2 = b1 & attackedBy2[Them];
     b3 = attackedBy[Us][ALL_PIECES] & KingFlank[file_of(ksq)] & Camp;
-
     int kingFlankAttack = popcount(b1) + popcount(b2);
     int kingFlankDefense = popcount(b3);
-
     kingDanger +=        kingAttackersCount[Them] * kingAttackersWeight[Them]
                  + 185 * popcount(kingRing[Us] & weak)
                  + 148 * popcount(unsafeChecks)
@@ -455,21 +390,10 @@ namespace {
                  -   6 * mg_value(score) / 8
                  -   4 * kingFlankDefense
                  +  37;
-
-    // Transform the kingDanger units into a Score, and subtract it from the evaluation
-    if (kingDanger > 100)
-        score -= make_score(kingDanger * kingDanger / 4096, kingDanger / 16);
-
-    // Penalty when our king is on a pawnless flank
-    if (!(pos.pieces(PAWN) & KingFlank[file_of(ksq)]))
-        score -= PawnlessFlank;
-
-    // Penalty if king flank is under attack, potentially moving toward the king
+    if (kingDanger > 100) score -= make_score(kingDanger * kingDanger / 4096, kingDanger / 16);
+    if (!(pos.pieces(PAWN) & KingFlank[file_of(ksq)])) score -= PawnlessFlank;
     score -= FlankAttacks * kingFlankAttack;
-
-    if (T)
-        Trace::add(KING, Us, score);
-
+    if (T) Trace::add(KING, Us, score);
     return score;
   }
 
@@ -480,8 +404,7 @@ namespace {
   Score Evaluation<T>::threats() const {
 
     constexpr Color     Them     = (Us == WHITE ? BLACK   : WHITE);
-    constexpr Direction Up       = pawn_push(Us);
-    constexpr Bitboard  TRank3BB = (Us == WHITE ? Rank3BB : Rank6BB);
+    const Bitboard  TRank3BB = (Us == WHITE ? Rank3BB : Rank6BB);
 
     Bitboard b, weak, defended, nonPawnEnemies, stronglyProtected, safe;
     Score score = SCORE_ZERO;
@@ -535,8 +458,8 @@ namespace {
     score += ThreatBySafePawn * popcount(b);
 
     // Find squares where our pawns can push on the next move
-    b  = shift<Up>(pos.pieces(Us, PAWN)) & ~pos.pieces();
-    b |= shift<Up>(b & TRank3BB) & ~pos.pieces();
+    b  = shift<pawn_push<Us>()>(pos.pieces(Us, PAWN)) & ~pos.pieces();
+    b |= shift<pawn_push<Us>()>(b & TRank3BB) & ~pos.pieces();
 
     // Keep only the squares which are relatively safe
     b &= ~attackedBy[Them][PAWN] & safe;
@@ -574,7 +497,7 @@ namespace {
   Score Evaluation<T>::passed() const {
 
     constexpr Color     Them = (Us == WHITE ? BLACK : WHITE);
-    constexpr Direction Up   = pawn_push(Us);
+    constexpr Direction Up   = pawn_push<Us>();
 
     auto king_proximity = [&](Color c, Square s) {
       return std::min(distance(pos.square<KING>(c), s), 5);
@@ -664,11 +587,9 @@ namespace {
     if (pos.non_pawn_material() < SpaceThreshold)
         return SCORE_ZERO;
 
-    constexpr Color Them     = (Us == WHITE ? BLACK : WHITE);
-    constexpr Direction Down = -pawn_push(Us);
-    constexpr Bitboard SpaceMask =
-      Us == WHITE ? CenterFiles & (Rank2BB | Rank3BB | Rank4BB)
-                  : CenterFiles & (Rank7BB | Rank6BB | Rank5BB);
+    constexpr Color Them = (Us == WHITE ? BLACK : WHITE);
+    const Bitboard SpaceMask = Us == WHITE ? (CenterFiles & (Rank2BB | Rank3BB | Rank4BB))
+                                           : (CenterFiles & (Rank7BB | Rank6BB | Rank5BB));
 
     // Find the available squares for our pieces inside the area defined by SpaceMask
     Bitboard safe =   SpaceMask
@@ -677,8 +598,8 @@ namespace {
 
     // Find all squares which are at most three squares behind some friendly pawn
     Bitboard behind = pos.pieces(Us, PAWN);
-    behind |= shift<Down>(behind);
-    behind |= shift<Down+Down>(behind);
+    behind |= shift<-pawn_push<Us>()>(behind);
+    behind |= shift<-2*pawn_push<Us>()>(behind);
 
     int bonus = popcount(safe) + popcount(behind & safe & ~attackedBy[Them][ALL_PIECES]);
     int weight = pos.count<ALL_PIECES>(Us) - 1;
@@ -701,8 +622,8 @@ namespace {
     Value mg = mg_value(score);
     Value eg = eg_value(score);
 
-    int outflanking =  distance<File>(pos.square<KING>(WHITE), pos.square<KING>(BLACK))
-                     - distance<Rank>(pos.square<KING>(WHITE), pos.square<KING>(BLACK));
+    int outflanking =  distance_file(pos.square<KING>(WHITE), pos.square<KING>(BLACK))
+                     - distance_rank(pos.square<KING>(WHITE), pos.square<KING>(BLACK));
 
     bool infiltration =   rank_of(pos.square<KING>(WHITE)) > RANK_4
                        || rank_of(pos.square<KING>(BLACK)) < RANK_5;
