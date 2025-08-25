@@ -1,0 +1,1 @@
+/usr/bin/c++ -O3 -DNDEBUG -Xlinker --dependency-file=CMakeFiles/chess_cli.dir/link.d CMakeFiles/chess_cli.dir/src/cli_main.cpp.o -o chess_cli  libengine_core.a
